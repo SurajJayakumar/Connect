@@ -28,8 +28,6 @@ interface Call {
 export default function Dashboard() {
   const { user, loading: authLoading } = useAuth();
 
-  // Fixed: Removed unused sidebarOpen state
-  // Instead, we'll only use it in mobile mode where it's actually needed
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('home');
@@ -130,8 +128,10 @@ export default function Dashboard() {
 
   const handleUserSelect = (user: User) => {
     setSelectedUser(user);
-    // We don't need to reference sidebarOpen here as we removed it
-    // since it's not used elsewhere in the component
+    // In mobile, switch to the user profile view when a user is selected
+    if (isMobile) {
+      setActiveTab('profile'); // Add a new tab for the profile view
+    }
   };
 
   const handleSignOut = async () => {
@@ -308,6 +308,54 @@ export default function Dashboard() {
             </div>
           </div>
         );
+      case 'profile':
+        // New profile tab for mobile view
+        return selectedUser ? (
+          <div className="text-center p-6 h-full flex flex-col justify-center">
+            <div className="mb-6">
+              {selectedUser.photoURL ? (
+                <div className="h-20 w-20 rounded-full bg-cover bg-center mx-auto" style={{backgroundImage: `url(${selectedUser.photoURL})`}} />
+              ) : (
+                <div className="h-20 w-20 rounded-full bg-purple-800 flex items-center justify-center text-white font-medium text-xl mx-auto">
+                  {getInitials(selectedUser.displayName)}
+                </div>
+              )}
+              <h2 className="text-2xl font-bold mt-4">{selectedUser.displayName}</h2>
+              <p className="text-gray-400">{selectedUser.email}</p>
+              <p className={`text-sm mt-2 ${selectedUser.status === 'online' ? 'text-green-500' : 'text-gray-500'}`}>
+                {selectedUser.status === 'online' ? 'Online' : 'Offline'}
+              </p>
+            </div>
+            
+            <p className="text-lg mb-6">Do you want to video call with this user?</p>
+            
+            <div className="flex justify-center gap-4">
+              <button className="bg-gradient-to-r from-purple-600 to-fuchsia-600 hover:from-purple-700 hover:to-fuchsia-700 text-white px-6 py-3 rounded-xl flex items-center gap-2 transition-all">
+                <Video className="h-5 w-5" />
+                Start Call
+              </button>
+              <button 
+                className="bg-gray-800 hover:bg-gray-700 text-white px-6 py-3 rounded-xl border border-gray-700 transition-all"
+                onClick={() => {
+                  setSelectedUser(null);
+                  setActiveTab('contacts'); // Go back to contacts when canceling
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          // Fallback if somehow profile is activated without a selected user
+          <div className="flex items-center justify-center h-full">
+            <button 
+              className="bg-gray-800 px-6 py-3 rounded-xl"
+              onClick={() => setActiveTab('contacts')}
+            >
+              Back to Contacts
+            </button>
+          </div>
+        );
       case 'settings':
         return (
           <div className="flex flex-col h-full p-4">
@@ -443,7 +491,7 @@ export default function Dashboard() {
         </div>
 
         {/* Content Area */}
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto pb-16 sm:pb-0">
           {isMobile ? renderTabContent() : (
             <div className="flex flex-col h-full p-4">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -571,7 +619,13 @@ export default function Dashboard() {
               </button>
               <button 
                 className={`flex flex-col items-center p-2 ${activeTab === 'contacts' ? 'text-purple-500' : 'text-gray-400'}`}
-                onClick={() => setActiveTab('contacts')}
+                onClick={() => {
+                  setActiveTab('contacts');
+                  // Clear selected user when switching to contacts
+                  if (activeTab === 'profile') {
+                    setSelectedUser(null);
+                  }
+                }}
               >
                 <Users className="h-6 w-6" />
                 <span className="text-xs mt-1">Contacts</span>
@@ -583,6 +637,20 @@ export default function Dashboard() {
                 <Settings className="h-6 w-6" />
                 <span className="text-xs mt-1">Settings</span>
               </button>
+              
+              {/* Only show back button when in profile view */}
+              {activeTab === 'profile' && (
+                <button 
+                  className="flex flex-col items-center p-2 text-purple-500"
+                  onClick={() => {
+                    setSelectedUser(null);
+                    setActiveTab('contacts');
+                  }}
+                >
+                  <LogOut className="h-6 w-6 transform rotate-180" />
+                  <span className="text-xs mt-1">Back</span>
+                </button>
+              )}
             </div>
           </div>
         )}
