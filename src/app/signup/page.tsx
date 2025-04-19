@@ -8,19 +8,39 @@ import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { setDoc, doc } from 'firebase/firestore';
 import { useAuth } from '../components/AuthProvider';
 
+// Define the form interface for TypeScript
+interface SignupForm {
+  name: string;
+  email: string;
+  password: string;
+  role: string;
+}
+
 export default function SignupPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
-  const [form, setForm] = useState({ name: '', email: '', password: '' });
+  const [form, setForm] = useState<SignupForm>({ 
+    name: '', 
+    email: '', 
+    password: '',
+    role: '' 
+  });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate role selection
+    if (!form.role) {
+      setError('Please select a role');
+      return;
+    }
+    
     setError(null);
     setLoading(true);
     try {
@@ -43,6 +63,7 @@ export default function SignupPage() {
         email: form.email,
         photoURL: null,
         status: 'online',
+        role: form.role,
         createdAt: new Date()
       });
       
@@ -124,6 +145,22 @@ export default function SignupPage() {
               minLength={6}
               className="w-full p-3 rounded-lg bg-gray-800 text-white border border-gray-600"
             />
+          </div>
+          
+          {/* Add the role selection dropdown */}
+          <div>
+            <label className="block mb-1">I am a</label>
+            <select
+              name="role"
+              value={form.role}
+              onChange={handleChange}
+              required
+              className="w-full p-3 rounded-lg bg-gray-800 text-white border border-gray-600"
+            >
+              <option value="">Select your role</option>
+              <option value="hearing_impaired">Hearing Impaired User</option>
+              <option value="hearing">Hearing User</option>
+            </select>
           </div>
 
           <button
