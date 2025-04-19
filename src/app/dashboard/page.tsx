@@ -8,6 +8,8 @@ import { auth, db } from '../firebase';
 import { useAuth } from '../components/AuthProvider';
 
 
+
+
 // Define types for user data
 interface User {
   id: string;
