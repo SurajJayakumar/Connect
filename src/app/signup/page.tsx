@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { auth, db } from '../firebase';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { setDoc, doc } from 'firebase/firestore';
@@ -17,8 +16,8 @@ interface SignupForm {
 }
 
 export default function SignupPage() {
-  const router = useRouter();
-  const { user, loading: authLoading } = useAuth();
+  
+  const {loading: authLoading } = useAuth();
   const [form, setForm] = useState<SignupForm>({ 
     name: '', 
     email: '', 
@@ -68,20 +67,27 @@ export default function SignupPage() {
       });
       
       // Redirect handled by AuthProvider
-    } catch (err: any) {
-      // Map common Firebase errors
-      switch (err.code) {
-        case 'auth/email-already-in-use':
-          setError('This email is already registered.');
-          break;
-        case 'auth/invalid-email':
-          setError('Invalid email format.');
-          break;
-        case 'auth/weak-password':
-          setError('Password should be at least 6 characters.');
-          break;
-        default:
-          setError(err.message);
+    } catch (err: unknown) {
+      // Type guard to check if the error has code property
+      if (err && typeof err === 'object' && 'code' in err) {
+        const firebaseError = err as { code: string; message: string };
+        // Map common Firebase errors
+        switch (firebaseError.code) {
+          case 'auth/email-already-in-use':
+            setError('This email is already registered.');
+            break;
+          case 'auth/invalid-email':
+            setError('Invalid email format.');
+            break;
+          case 'auth/weak-password':
+            setError('Password should be at least 6 characters.');
+            break;
+          default:
+            setError(firebaseError.message);
+        }
+      } else {
+        // Handle the case where it's not a FirebaseError
+        setError('An unexpected error occurred. Please try again.');
       }
     } finally {
       setLoading(false);

@@ -1,13 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Menu, X, ChevronRight, Search, Video, Home, Users, Settings, Clock, LogOut } from 'lucide-react';
+import { Search, Video, Home, Users, Settings, Clock, LogOut } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
-import { ref, getDownloadURL } from 'firebase/storage';
 import { auth, db } from '../firebase';
 import { useAuth } from '../components/AuthProvider';
-import { useRouter } from 'next/navigation';
+
 
 // Define types for user data
 interface User {
@@ -28,9 +27,9 @@ interface Call {
 
 export default function Dashboard() {
   const { user, loading: authLoading } = useAuth();
-  const router = useRouter();
-  
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Fixed: Removed unused sidebarOpen state
+  // Instead, we'll only use it in mobile mode where it's actually needed
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('home');
@@ -122,9 +121,7 @@ export default function Dashboard() {
     fetchData();
   }, [user, authLoading]);
 
-  const toggleSidebar = () => {
-    setSidebarOpen(!sidebarOpen);
-  };
+  
 
   const filteredUsers = users.filter(user => 
     user.displayName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -133,10 +130,8 @@ export default function Dashboard() {
 
   const handleUserSelect = (user: User) => {
     setSelectedUser(user);
-    // Auto-close sidebar on mobile after selection
-    if (isMobile) {
-      setSidebarOpen(false);
-    }
+    // We don't need to reference sidebarOpen here as we removed it
+    // since it's not used elsewhere in the component
   };
 
   const handleSignOut = async () => {
@@ -359,9 +354,7 @@ export default function Dashboard() {
     <div className="flex min-h-screen bg-gradient-to-br from-black via-[#1a032e] to-black text-white">
       {/* Desktop Sidebar - hidden on mobile */}
       {!isMobile && (
-        <div 
-          className={`fixed inset-y-0 left-0 z-30 bg-[#0c0118] transition-all duration-300 ease-in-out shadow-2xl border-r border-purple-900/30 w-64`}
-        >
+        <div className="fixed inset-y-0 left-0 z-30 bg-[#0c0118] transition-all duration-300 ease-in-out shadow-2xl border-r border-purple-900/30 w-64">
           <div className="flex items-center justify-between h-16 px-4">
             <h2 className="font-bold text-xl bg-gradient-to-r from-purple-500 to-fuchsia-500 bg-clip-text text-transparent">
               Connect

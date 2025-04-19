@@ -1,15 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState} from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { auth } from '../firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { useAuth } from '../components/AuthProvider';
 
 export default function LoginPage() {
-  const router = useRouter();
-  const { user, loading: authLoading } = useAuth();
+  
+  const {loading: authLoading } = useAuth();
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -27,23 +26,30 @@ export default function LoginPage() {
     try {
       await signInWithEmailAndPassword(auth, form.email, form.password);
       // The AuthProvider will handle the redirect
-    } catch (err: any) {
-      // map common Firebase errors to friendly messages
-      switch (err.code) {
-        case 'auth/user-not-found':
-          setError('No account found with that email.');
-          break;
-        case 'auth/wrong-password':
-          setError('Incorrect password.');
-          break;
-        case 'auth/invalid-email':
-          setError('Invalid email format.');
-          break;
-        case 'auth/too-many-requests':
-          setError('Too many attempts. Please try again later.');
-          break;
-        default:
-          setError(err.message);
+    } catch (err: unknown) {
+      // Type guard to check if the error has code property
+      if (err && typeof err === 'object' && 'code' in err) {
+        const firebaseError = err as { code: string; message: string };
+        // map common Firebase errors to friendly messages
+        switch (firebaseError.code) {
+          case 'auth/user-not-found':
+            setError('No account found with that email.');
+            break;
+          case 'auth/wrong-password':
+            setError('Incorrect password.');
+            break;
+          case 'auth/invalid-email':
+            setError('Invalid email format.');
+            break;
+          case 'auth/too-many-requests':
+            setError('Too many attempts. Please try again later.');
+            break;
+          default:
+            setError(firebaseError.message);
+        }
+      } else {
+        // Handle the case where it's not a FirebaseError
+        setError('An unexpected error occurred. Please try again.');
       }
     } finally {
       setLoading(false);
