@@ -198,16 +198,21 @@ export default function VideoCall() {
       setRoomId(inputRoomId);
       
       // In a real app, you would fetch the offer from your signaling server
-      // For this demo, we'll simulate receiving an offer
+      // For this demo, we'll create a valid simulated offer
+      // FIXED: Create a valid ice-pwd that meets the length requirements (22-256 chars)
+      const validIcePwd = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"; // 42 characters
+      
       const simulatedOffer = {
         type: 'offer',
         sdp: 'v=0\r\no=- 1234567890 1 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\na=group:BUNDLE 0 1\r\n' +
              'a=msid-semantic: WMS stream_id\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\nc=IN IP4 0.0.0.0\r\n' +
-             'a=rtcp:9 IN IP4 0.0.0.0\r\na=ice-ufrag:someufrag\r\na=ice-pwd:someicepwd\r\n' +
+             'a=rtcp:9 IN IP4 0.0.0.0\r\na=ice-ufrag:someufragxyz\r\n' + 
+             `a=ice-pwd:${validIcePwd}\r\n` +
              'a=fingerprint:sha-256 00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF\r\n' +
              'a=setup:actpass\r\na=mid:0\r\na=sendrecv\r\na=rtcp-mux\r\na=rtpmap:111 opus/48000/2\r\n' +
              'a=msid:stream_id audio_track_id\r\na=ssrc:1001 cname:somecname\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\n' +
-             'c=IN IP4 0.0.0.0\r\na=rtcp:9 IN IP4 0.0.0.0\r\na=ice-ufrag:someufrag\r\na=ice-pwd:someicepwd\r\n' +
+             'c=IN IP4 0.0.0.0\r\na=rtcp:9 IN IP4 0.0.0.0\r\na=ice-ufrag:someufragxyz\r\n' + 
+             `a=ice-pwd:${validIcePwd}\r\n` +
              'a=fingerprint:sha-256 00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF\r\n' +
              'a=setup:actpass\r\na=mid:1\r\na=sendrecv\r\na=rtcp-mux\r\na=rtpmap:96 VP8/90000\r\n' +
              'a=msid:stream_id video_track_id\r\na=ssrc:2001 cname:somecname\r\n'
