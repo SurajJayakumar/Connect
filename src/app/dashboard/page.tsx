@@ -92,7 +92,7 @@ export default function Dashboard() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col items-center justify-center p-4 mt-16">
+      <div className={`flex-1 flex flex-col items-center justify-center p-4 ${isMobile ? 'mt-12' : 'mt-16'}`}>
         <div className="text-center p-8 bg-purple-900/10 border border-purple-900/30 rounded-xl max-w-md w-full">
           <h2 className="text-2xl font-bold mb-6 bg-gradient-to-r from-purple-500 to-fuchsia-500 bg-clip-text text-transparent">
             Start Video Call
@@ -103,8 +103,8 @@ export default function Dashboard() {
           </p>
           
           <Link href="/VideoCall">
-            <button className="w-full bg-gradient-to-r from-purple-600 to-fuchsia-600 hover:from-purple-700 hover:to-fuchsia-700 text-white px-6 py-4 rounded-xl flex items-center justify-center gap-2 transition-all text-lg font-medium">
-              <Video className="h-5 w-5" />
+            <button className={`w-full bg-gradient-to-r from-purple-600 to-fuchsia-600 hover:from-purple-700 hover:to-fuchsia-700 text-white px-6 py-4 rounded-xl flex items-center justify-center gap-2 transition-all ${isMobile ? 'text-base' : 'text-lg'} font-medium`}>
+              <Video className={`${isMobile ? 'h-4 w-4' : 'h-5 w-5'}`} />
               Start a Call
             </button>
           </Link>
