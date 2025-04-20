@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from "react";
-import { Video, Camera, Mic, MicOff, PhoneOff, Users, AlertCircle, CheckCircle, Loader } from "lucide-react";
-import { collection, doc, setDoc, getDoc, updateDoc, addDoc } from 'firebase/firestore';
+import { Video, Mic, MicOff, PhoneOff, Users, Loader } from "lucide-react";
+import { collection, doc, getDoc, updateDoc, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
 export default function VideoCall() {
@@ -10,13 +10,11 @@ export default function VideoCall() {
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const [status, setStatus] = useState("Initializing webcam...");
   const [webcamActive, setWebcamActive] = useState(false);
-  const [serverConnected, setServerConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [inCall, setInCall] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [roomId, setRoomId] = useState("");
   const [inputRoomId, setInputRoomId] = useState("");
-  const [participants, setParticipants] = useState(1);
 
   const peerConnection = useRef<RTCPeerConnection | null>(null);
   const localStream = useRef<MediaStream | null>(null);
@@ -54,7 +52,6 @@ export default function VideoCall() {
       pc.ontrack = (e) => {
         if (remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = e.streams[0];
-          setParticipants(2);
           setStatus("Connected to peer.");
         }
       };
@@ -63,7 +60,6 @@ export default function VideoCall() {
         console.log("ICE state:", state);
         if (["disconnected", "failed", "closed"].includes(state)) {
           setInCall(false);
-          setParticipants(1);
           setStatus("Call ended.");
         }
       };
@@ -74,7 +70,6 @@ export default function VideoCall() {
     getWebcam();
     setupPeer();
     setTimeout(() => {
-      setServerConnected(true);
       setStatus("Ready to start or join a call");
     }, 1000);
 
@@ -157,7 +152,6 @@ export default function VideoCall() {
 
       setRoomId(inputRoomId);
       setInCall(true);
-      setParticipants(2);
       setStatus("Joined the room. Connected!");
     } catch (err) {
       console.error("Error joining room:", err);
@@ -170,7 +164,6 @@ export default function VideoCall() {
   const endCall = () => {
     peerConnection.current?.close();
     setInCall(false);
-    setParticipants(1);
     setRoomId("");
     setInputRoomId("");
     setStatus("Call ended");
