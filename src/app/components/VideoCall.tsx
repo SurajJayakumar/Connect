@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Video, Mic, MicOff, PhoneOff, Users, Loader } from "lucide-react";
-import { collection, doc, getDoc, updateDoc, addDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, updateDoc, addDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 
 export default function VideoCall() {
@@ -15,7 +15,7 @@ export default function VideoCall() {
   const [isMuted, setIsMuted] = useState(false);
   const [roomId, setRoomId] = useState("");
   const [inputRoomId, setInputRoomId] = useState("");
-  const [participants, setParticipants] = useState(1); // ✅ Added this line
+  const [participants, setParticipants] = useState(1);
 
   const peerConnection = useRef<RTCPeerConnection | null>(null);
   const localStream = useRef<MediaStream | null>(null);
@@ -49,7 +49,6 @@ export default function VideoCall() {
         ]
       });
 
-      pc.onicecandidate = (e) => console.log("ICE candidate:", e.candidate);
       pc.ontrack = (e) => {
         if (remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = e.streams[0];
@@ -57,6 +56,7 @@ export default function VideoCall() {
           setStatus("Connected to peer.");
         }
       };
+
       pc.oniceconnectionstatechange = () => {
         const state = pc.iceConnectionState;
         console.log("ICE state:", state);
@@ -72,9 +72,7 @@ export default function VideoCall() {
 
     getWebcam();
     setupPeer();
-    setTimeout(() => {
-      setStatus("Ready to start or join a call");
-    }, 1000);
+    setTimeout(() => setStatus("Ready to start or join a call"), 1000);
 
     return () => {
       localStream.current?.getTracks().forEach(track => track.stop());
@@ -84,7 +82,6 @@ export default function VideoCall() {
 
   const createRoom = async () => {
     if (!peerConnection.current || !localStream.current) return;
-
     setIsConnecting(true);
     setStatus("Creating a new room...");
 
@@ -107,6 +104,23 @@ export default function VideoCall() {
       setRoomId(generatedRoomId);
       setInCall(true);
       setStatus(`Room created. Share ID: ${generatedRoomId}`);
+
+      peerConnection.current.onicecandidate = async (event) => {
+        if (event.candidate) {
+          const candidatesRef = collection(roomRef, "callerCandidates");
+          await addDoc(candidatesRef, event.candidate.toJSON());
+        }
+      };
+
+      const calleeCandidatesRef = collection(roomRef, "calleeCandidates");
+      onSnapshot(calleeCandidatesRef, (snapshot) => {
+        snapshot.docChanges().forEach(change => {
+          if (change.type === "added") {
+            const data = change.doc.data();
+            peerConnection.current?.addIceCandidate(new RTCIceCandidate(data));
+          }
+        });
+      });
     } catch (err) {
       console.error("Error creating room:", err);
       setStatus("Failed to create room.");
@@ -117,7 +131,6 @@ export default function VideoCall() {
 
   const joinRoom = async () => {
     if (!peerConnection.current || !localStream.current || !inputRoomId) return;
-
     setIsConnecting(true);
     setStatus(`Joining room ${inputRoomId}...`);
 
@@ -125,27 +138,19 @@ export default function VideoCall() {
       const roomRef = doc(db, "rooms", inputRoomId);
       const roomSnap = await getDoc(roomRef);
 
-      console.log("📦 Fetched room snapshot:", roomSnap.exists());
-
       if (!roomSnap.exists()) {
-        console.error("❌ Room not found.");
         setStatus("Room not found.");
         return;
       }
 
       const roomData = roomSnap.data();
-      console.log("✅ Room data:", roomData);
-
       const offer = roomData?.offer;
-
       if (!offer) {
-        console.error("❌ Offer not found in room.");
         setStatus("Offer not found in the room.");
         return;
       }
 
       await peerConnection.current.setRemoteDescription(new RTCSessionDescription(offer));
-      console.log("✅ Remote description set");
 
       localStream.current.getTracks().forEach(track => {
         peerConnection.current?.addTrack(track, localStream.current!);
@@ -153,8 +158,6 @@ export default function VideoCall() {
 
       const answer = await peerConnection.current.createAnswer();
       await peerConnection.current.setLocalDescription(answer);
-
-      console.log("✅ Created answer:", answer);
 
       await updateDoc(roomRef, {
         answer: {
@@ -167,9 +170,25 @@ export default function VideoCall() {
       setInCall(true);
       setParticipants(2);
       setStatus("Joined the room. Connected!");
-      console.log("🎉 Successfully joined the room!");
+
+      peerConnection.current.onicecandidate = async (event) => {
+        if (event.candidate) {
+          const candidatesRef = collection(roomRef, "calleeCandidates");
+          await addDoc(candidatesRef, event.candidate.toJSON());
+        }
+      };
+
+      const callerCandidatesRef = collection(roomRef, "callerCandidates");
+      onSnapshot(callerCandidatesRef, (snapshot) => {
+        snapshot.docChanges().forEach(change => {
+          if (change.type === "added") {
+            const data = change.doc.data();
+            peerConnection.current?.addIceCandidate(new RTCIceCandidate(data));
+          }
+        });
+      });
     } catch (err) {
-      console.error("🔥 Error in joinRoom:", err);
+      console.error("Error joining room:", err);
       setStatus("Failed to join room.");
     } finally {
       setIsConnecting(false);
