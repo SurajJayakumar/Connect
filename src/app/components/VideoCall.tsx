@@ -15,6 +15,7 @@ export default function VideoCall() {
   const [isMuted, setIsMuted] = useState(false);
   const [roomId, setRoomId] = useState("");
   const [inputRoomId, setInputRoomId] = useState("");
+  const [participants, setParticipants] = useState(1); // ✅ Added this line
 
   const peerConnection = useRef<RTCPeerConnection | null>(null);
   const localStream = useRef<MediaStream | null>(null);
@@ -52,6 +53,7 @@ export default function VideoCall() {
       pc.ontrack = (e) => {
         if (remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = e.streams[0];
+          setParticipants(2);
           setStatus("Connected to peer.");
         }
       };
@@ -60,6 +62,7 @@ export default function VideoCall() {
         console.log("ICE state:", state);
         if (["disconnected", "failed", "closed"].includes(state)) {
           setInCall(false);
+          setParticipants(1);
           setStatus("Call ended.");
         }
       };
@@ -122,26 +125,36 @@ export default function VideoCall() {
       const roomRef = doc(db, "rooms", inputRoomId);
       const roomSnap = await getDoc(roomRef);
 
+      console.log("📦 Fetched room snapshot:", roomSnap.exists());
+
       if (!roomSnap.exists()) {
+        console.error("❌ Room not found.");
         setStatus("Room not found.");
         return;
       }
 
       const roomData = roomSnap.data();
+      console.log("✅ Room data:", roomData);
+
       const offer = roomData?.offer;
 
       if (!offer) {
+        console.error("❌ Offer not found in room.");
         setStatus("Offer not found in the room.");
         return;
       }
 
       await peerConnection.current.setRemoteDescription(new RTCSessionDescription(offer));
+      console.log("✅ Remote description set");
+
       localStream.current.getTracks().forEach(track => {
         peerConnection.current?.addTrack(track, localStream.current!);
       });
 
       const answer = await peerConnection.current.createAnswer();
       await peerConnection.current.setLocalDescription(answer);
+
+      console.log("✅ Created answer:", answer);
 
       await updateDoc(roomRef, {
         answer: {
@@ -152,9 +165,11 @@ export default function VideoCall() {
 
       setRoomId(inputRoomId);
       setInCall(true);
+      setParticipants(2);
       setStatus("Joined the room. Connected!");
+      console.log("🎉 Successfully joined the room!");
     } catch (err) {
-      console.error("Error joining room:", err);
+      console.error("🔥 Error in joinRoom:", err);
       setStatus("Failed to join room.");
     } finally {
       setIsConnecting(false);
@@ -164,6 +179,7 @@ export default function VideoCall() {
   const endCall = () => {
     peerConnection.current?.close();
     setInCall(false);
+    setParticipants(1);
     setRoomId("");
     setInputRoomId("");
     setStatus("Call ended");
@@ -203,8 +219,8 @@ export default function VideoCall() {
                 </div>
               )}
             </div>
-
             <div className="mt-2 text-sm text-gray-400">Status: {status}</div>
+            <div className="text-sm text-gray-400 mt-1">Participants: {participants}</div>
           </div>
 
           <div className="bg-purple-900/10 border border-purple-900/30 rounded-xl p-4 flex flex-col">
