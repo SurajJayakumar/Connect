@@ -11,12 +11,27 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 
+// Add this type definition at the top of the file
+declare global {
+  interface Window {
+    SpeechRecognition: any;
+    webkitSpeechRecognition: any;
+  }
+}
+
 export default function VideoCall() {
   // State
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [callId, setCallId] = useState('');
   const [buttons, setButtons] = useState({ cam: false, call: true, answer: true, hangup: true });
+  
+  // Speech recognition state
+  const [localTranscript, setLocalTranscript] = useState('');
+  const [remoteTranscript, setRemoteTranscript] = useState('');
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
+  const dataChannelRef = useRef<RTCDataChannel | null>(null);
 
   // Refs for video elements and unsubscribes
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -35,6 +50,47 @@ export default function VideoCall() {
 
   const setupPeerConnection = () => {
     const pc = new RTCPeerConnection(servers);
+    
+    // Set up data channel for transcript sharing
+    const dataChannel = pc.createDataChannel('transcripts', {
+      ordered: true,
+    });
+    
+    dataChannel.onopen = () => {
+      console.log('Data channel opened');
+    };
+    
+    dataChannel.onclose = () => {
+      console.log('Data channel closed');
+    };
+    
+    dataChannel.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'transcript') {
+          setRemoteTranscript(data.text);
+        }
+      } catch (err) {
+        console.error('Error parsing data channel message:', err);
+      }
+    };
+    
+    dataChannelRef.current = dataChannel;
+    
+    pc.ondatachannel = (event) => {
+      const receiveChannel = event.channel;
+      receiveChannel.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.type === 'transcript') {
+            setRemoteTranscript(data.text);
+          }
+        } catch (err) {
+          console.error('Error parsing data channel message:', err);
+        }
+      };
+    };
+    
     pc.ontrack = event => {
       const remote = new MediaStream();
       event.streams[0].getTracks().forEach(track => remote.addTrack(track));
@@ -43,7 +99,91 @@ export default function VideoCall() {
         return remote;
       });
     };
+    
     return pc;
+  };
+
+  // Initialize speech recognition
+  const initSpeechRecognition = () => {
+    // Check if browser supports SpeechRecognition
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    
+    if (!SpeechRecognition) {
+      console.error('Speech recognition not supported in this browser');
+      return null;
+    }
+    
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US'; // Set language
+    
+    recognition.onresult = (event: any) => {
+      let currentTranscript = '';
+      
+      // Get all results
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        
+        if (event.results[i].isFinal) {
+          currentTranscript += transcript + ' ';
+        }
+      }
+      
+      if (currentTranscript) {
+        const newTranscript = localTranscript + currentTranscript;
+        setLocalTranscript(newTranscript);
+        
+        // Send transcript to remote peer
+        if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
+          dataChannelRef.current.send(JSON.stringify({
+            type: 'transcript',
+            text: newTranscript
+          }));
+        }
+      }
+    };
+    
+    recognition.onerror = (event: any) => {
+      console.error('Speech recognition error', event.error);
+      setIsListening(false);
+    };
+    
+    return recognition;
+  };
+
+  // Toggle speech recognition
+  const toggleListening = () => {
+    if (isListening) {
+      // Stop listening
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        setIsListening(false);
+      }
+    } else {
+      // Start listening
+      if (!recognitionRef.current) {
+        recognitionRef.current = initSpeechRecognition();
+      }
+      
+      if (recognitionRef.current) {
+        recognitionRef.current.start();
+        setIsListening(true);
+      }
+    }
+  };
+
+  // Clear transcripts
+  const clearTranscripts = () => {
+    setLocalTranscript('');
+    
+    // Send empty transcript to remote peer
+    if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
+      dataChannelRef.current.send(JSON.stringify({
+        type: 'transcript',
+        text: ''
+      }));
+    }
   };
 
   // Initialize peer connection on mount
@@ -54,6 +194,11 @@ export default function VideoCall() {
       pcRef.current?.close();
       unsubOffer.current?.();
       unsubAnswer.current?.();
+      
+      // Cleanup speech recognition
+      if (recognitionRef.current && isListening) {
+        recognitionRef.current.stop();
+      }
     };
   }, []);
 
@@ -158,7 +303,16 @@ export default function VideoCall() {
     setLocalStream(null);
     setRemoteStream(null);
     setCallId('');
+    setLocalTranscript('');
+    setRemoteTranscript('');
 
+    // Stop speech recognition if active
+    if (recognitionRef.current && isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    }
+
+    dataChannelRef.current = null;
     pcRef.current = setupPeerConnection();
     setButtons({ cam: false, call: true, answer: true, hangup: true });
   };
@@ -171,24 +325,60 @@ export default function VideoCall() {
         <section className="bg-black/40 p-6 rounded-xl backdrop-blur-sm border border-purple-800/30">
           <h2 className="text-xl font-semibold mb-4 text-purple-300">1. Webcam</h2>
           <div className="flex flex-col md:flex-row gap-4 mb-4">
-            <div className="w-full md:w-1/2 relative">
-              <video 
-                ref={localVideoRef} 
-                autoPlay 
-                playsInline 
-                muted 
-                className="w-full bg-black rounded-lg border border-purple-700/50 aspect-video" 
-              />
-              <div className="absolute bottom-2 left-2 bg-purple-900/70 px-2 py-1 rounded text-xs">You</div>
+            <div className="w-full md:w-1/2 flex flex-col gap-3">
+              <div className="relative">
+                <video 
+                  ref={localVideoRef} 
+                  autoPlay 
+                  playsInline 
+                  muted 
+                  className="w-full bg-black rounded-lg border border-purple-700/50 aspect-video" 
+                />
+                <div className="absolute bottom-2 left-2 bg-purple-900/70 px-2 py-1 rounded text-xs">You</div>
+              </div>
+              <div className="bg-black/60 p-3 rounded-lg border border-purple-700/50 h-28 overflow-y-auto">
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="text-sm font-medium text-purple-300">Your Speech</h3>
+                  <div className="flex gap-1">
+                    <button 
+                      onClick={toggleListening}
+                      className={`px-3 py-1 rounded text-xs font-medium ${
+                        isListening 
+                          ? 'bg-red-600 hover:bg-red-700' 
+                          : 'bg-green-600 hover:bg-green-700'
+                      }`}
+                    >
+                      {isListening ? 'Stop' : 'Start'}
+                    </button>
+                    <button 
+                      onClick={clearTranscripts}
+                      className="px-3 py-1 bg-purple-700 rounded text-xs hover:bg-purple-600 font-medium"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+                <p className="whitespace-pre-wrap text-purple-100 text-xs">
+                  {localTranscript || 'Your speech will appear here...'}
+                </p>
+              </div>
             </div>
-            <div className="w-full md:w-1/2 relative">
-              <video 
-                ref={remoteVideoRef} 
-                autoPlay 
-                playsInline 
-                className="w-full bg-black rounded-lg border border-purple-700/50 aspect-video" 
-              />
-              <div className="absolute bottom-2 left-2 bg-purple-900/70 px-2 py-1 rounded text-xs">Remote</div>
+            <div className="w-full md:w-1/2 flex flex-col gap-3">
+              <div className="relative">
+                <video 
+                  ref={remoteVideoRef} 
+                  autoPlay 
+                  playsInline 
+                  className="w-full bg-black rounded-lg border border-purple-700/50 aspect-video" 
+                />
+                <div className="absolute bottom-2 left-2 bg-purple-900/70 px-2 py-1 rounded text-xs">Remote</div>
+              </div>
+              <div className="bg-black/60 p-3 rounded-lg border border-purple-700/50 h-28 overflow-y-auto">
+                <h3 className="text-sm font-medium text-purple-300 mb-2">Remote Speech</h3>
+                <p className="whitespace-pre-wrap text-purple-100 text-xs">
+                  {remoteTranscript || 'Remote speech will appear here...'}
+                </p>
+              </div>
             </div>
           </div>
           <button 
@@ -251,9 +441,11 @@ export default function VideoCall() {
           </div>
         </section>
 
+
+
         {/* Hangup */}
         <section className="bg-black/40 p-6 rounded-xl backdrop-blur-sm border border-purple-800/30">
-          <h2 className="text-xl font-semibold mb-4 text-purple-300">4. Hangup</h2>
+          <h2 className="text-xl font-semibold mb-4 text-purple-300">5. Hangup</h2>
           <button 
             onClick={hangupCall} 
             disabled={buttons.hangup} 
